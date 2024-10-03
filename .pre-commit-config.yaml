@@ -1,0 +1,112 @@
+---
+repos:
+  - repo: meta
+    hooks:
+      - id: identity
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args:
+          - --allow-missing-credentials
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: requirements-txt-fixer
+        args:
+          - requirements.txt
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-use-type-annotations
+      - id: python-no-log-warn
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.17.0
+    hooks:
+      - id: pyupgrade
+        args:
+          - --py310-plus
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+  - repo: https://github.com/PyCQA/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        additional_dependencies:
+          - tomli
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort imports in Python files
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-PyYAML
+          - types-requests
+          - types-pytz
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.8.7
+    hooks:
+      - id: nbqa-black
+      - id: nbqa-pyupgrade
+        args:
+          - --py310-plus
+      - id: nbqa-isort
+      - id: nbqa-flake8
+        args:
+          - --ignore=E501,W503
+      - id: nbqa-mypy
+        additional_dependencies:
+          - mypy
+          - types-pytz
+          - types-requests
+          - types-toml
+  - repo: https://github.com/jumanjihouse/pre-commit-hooks
+    rev: 3.0.0
+    hooks:
+      - id: shellcheck
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages:
+          - commit-msg
+  - repo: local
+    hooks:
+      - id: doctest
+        name: run doctest
+        entry: pytest --doctest-modules --cov-fail-under 0 myproj
+        language: python
+        files: ^myproj/
+        types:
+          - file
+          - python
+      - id: lint-markdown
+        name: Run markdownlint
+        description: Checks the style of Markdown files.
+        entry: markdownlint
+        language: node
+        types:
+          - markdown
+        files: \.(md|mdown|markdown)$
+        additional_dependencies:
+          - markdownlint-cli
