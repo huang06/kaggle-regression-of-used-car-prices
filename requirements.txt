@@ -1,0 +1,12 @@
+catboost
+category-encoders
+jupyterlab
+lightgbm
+matplotlib
+numpy<2.0.0
+optuna
+pandas[performance]==2.2.3
+plotly
+scikit-learn
+xgboost
+ydata-profiling[notebook]
