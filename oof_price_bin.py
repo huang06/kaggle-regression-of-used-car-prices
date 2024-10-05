@@ -8,7 +8,8 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import KFold
-from sklearn.svm import SVR
+
+# from sklearn.svm import SVR
 from xgboost import XGBRegressor
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level="INFO")
@@ -20,6 +21,9 @@ train_df = pd.read_csv("./data/train.csv")
 test_df = pd.read_csv("./data/test.csv")
 
 test_id_list = list(test_df["id"])
+
+
+# In[2]:
 
 
 # 1. 特徵工程
@@ -60,14 +64,10 @@ test_df = feature_engineering(test_df)
 def bin_price(data):
     df = data.copy()
     # 計算四分位距
-    Q1 = np.percentile(df["price"], 25)
-    Q3 = np.percentile(df["price"], 75)
-    IQR = Q3 - Q1
-
-    # 定義異常值範圍
-    # lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-
+    q1 = np.percentile(df["price"], 25)
+    q3 = np.percentile(df["price"], 75)
+    iqr = q3 - q1
+    upper_bound = q3 + 1.5 * iqr
     # 標記異常價格
     df["price_bin"] = (df["price"] < upper_bound).astype(int)
     return df
@@ -75,12 +75,6 @@ def bin_price(data):
 
 log.info("Bin Price: train_df")
 train_df = bin_price(train_df)
-
-
-# In[ ]:
-
-
-train_df
 
 
 # In[ ]:
@@ -121,10 +115,14 @@ train_df, test_df = target_encode(train_df, test_df, "price", cat_cols)
 # In[ ]:
 
 
-# 4. 模型訓練與預測
+# 4. 目標變數對數轉換
+train_df["log_price"] = np.log1p(train_df["price"])
 
 
-# OOF 預測
+# In[ ]:
+
+
+# 5. 模型訓練與 OOF 預測
 def get_oof_predictions(model, train_df, test_df, features, target_col, n_folds=5):
     oof_train = np.zeros(len(train_df))
     oof_test = np.zeros(len(test_df))
@@ -183,31 +181,48 @@ catboost_clf_params = {
     "random_seed": 9999,
 }
 catboost_clf = CatBoostClassifier(**catboost_clf_params)
+catboost_reg_params = {
+    "iterations": 1000,
+    "learning_rate": 0.03,
+    "depth": 10,
+    "l2_leaf_reg": 17,
+    "random_strength": 11,
+    "subsample": 0.95,
+    "verbose": 1,
+    "cat_features": cat_features,
+    "random_seed": 9999,
+}
+catboost_reg = CatBoostRegressor(**catboost_reg_params)
 lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, verbose=1, random_state=9999)
 xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
 ridge = Ridge(random_state=9999)
 
-# svr_oof_train, svr_oof_test = get_oof_predictions(svr, train_df, test_df, features, "price")
-
 log.info("Get OOF Predictions: catboost_clf")
-catboost_oof_train, catboost_oof_test = get_oof_predictions(
+catboost_clf_oof_train, catboost_clf_oof_test = get_oof_predictions(
     catboost_clf, train_df, test_df, cat_features + num_features, "price_bin"
 )
 
+log.info("Get OOF Predictions: catboost_reg")
+catboost_reg_oof_train, catboost_reg_oof_test = get_oof_predictions(
+    catboost_clf, train_df, test_df, cat_features + num_features, "log_price"
+)
+
 log.info("Get OOF Predictions: lgbm")
-lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, num_features, "price")
+lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, num_features, "log_price")
 
 log.info("Get OOF Predictions: xgb")
-xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, num_features, "price")
+xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, num_features, "log_price")
 
-# 5. 集成模型 (Ridge 回歸)
-# NOTE: drop svr_oof_train(test)
-ensemble_train = np.column_stack([catboost_oof_train, lgbm_oof_train, xgb_oof_train])
-ensemble_test = np.column_stack([catboost_oof_test, lgbm_oof_test, xgb_oof_test])
+# 6. 集成模型 (Ridge 回歸)
+ensemble_train = np.column_stack(
+    [catboost_clf_oof_train, catboost_reg_oof_train, lgbm_oof_train, xgb_oof_train]
+)
+ensemble_test = np.column_stack([catboost_clf_oof_test, catboost_reg_oof_test, lgbm_oof_test, xgb_oof_test])
 
 log.info("Ridge Regression")
-ridge.fit(ensemble_train, train_df["price"])
-final_predictions = ridge.predict(ensemble_test)
+ridge.fit(ensemble_train, train_df["log_price"])
+final_predictions_log = ridge.predict(ensemble_test)
+final_predictions = np.expm1(final_predictions_log)
 
 
 # In[ ]:
