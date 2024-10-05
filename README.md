@@ -16,6 +16,10 @@ python3 -m pip install -U -r requirements.txt
 
 ## Various Approaches
 
+Private Score: 63807.34707 Public score: 72698.31823
+
+- add CatBoost
+
 Private Score: 63822.27010 Public score: 72717.78853
 
 - bin_price

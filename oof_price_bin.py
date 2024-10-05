@@ -172,18 +172,18 @@ num_features = [
 # 定義模型
 # svr = SVR(kernel="rbf")
 catboost_clf_params = {
-    "iterations": 10,  # 1000,
+    "iterations": 1000,
     "learning_rate": 0.03,
     "depth": 10,
     "l2_leaf_reg": 17,
     "random_strength": 11,
     "subsample": 0.95,
-    "verbose": 0,
+    "verbose": 1,
     "cat_features": cat_features,
     "random_seed": 9999,
 }
 catboost_clf = CatBoostClassifier(**catboost_clf_params)
-lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, verbose=0, random_state=9999)
+lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, verbose=1, random_state=9999)
 xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
 ridge = Ridge(random_state=9999)
 
