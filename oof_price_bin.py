@@ -118,14 +118,8 @@ train_df, test_df = target_encode(train_df, test_df, "price", cat_cols)
 # In[ ]:
 
 
-# 4. 目標變數對數轉換
-train_df["log_price"] = np.log1p(train_df["price"])
-
-
-# In[ ]:
-
-
-train_df.dtypes.sort_index()
+# # 4. 目標變數對數轉換
+# train_df["log_price"] = np.log1p(train_df["price"])
 
 
 # In[ ]:
@@ -214,7 +208,7 @@ catboost_reg_params = {
 }
 catboost_reg = CatBoostRegressor(**catboost_reg_params)
 catboost_reg_oof_train, catboost_reg_oof_test = get_oof_predictions(
-    catboost_reg, train_df, test_df, ["brand", "model", "brand_model"] + num_features, "log_price"
+    catboost_reg, train_df, test_df, ["brand", "model", "brand_model"] + num_features, "price"
 )
 
 log.info("OOF Predictions: LGBMRegressor")
@@ -227,10 +221,10 @@ lgbm = LGBMRegressor(
     objective="regression",
     metric="rmse",
 )
-lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, num_features, "log_price")
+lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, num_features, "price")
 
 log.info("OOF Predictions: XGBRegressor")
-xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, num_features, "log_price")
+xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, num_features, "price")
 
 # 6. 集成模型 (Ridge 回歸)
 ensemble_train = np.column_stack(
@@ -239,9 +233,9 @@ ensemble_train = np.column_stack(
 ensemble_test = np.column_stack([catboost_clf_oof_test, catboost_reg_oof_test, lgbm_oof_test, xgb_oof_test])
 
 log.info("Meta-Learner: Ridge")
-ridge.fit(ensemble_train, train_df["log_price"])
-final_predictions_log = ridge.predict(ensemble_test)
-final_predictions = np.expm1(final_predictions_log)
+ridge.fit(ensemble_train, train_df["price"])
+final_predictions = ridge.predict(ensemble_test)
+# final_predictions = np.expm1(final_predictions_log)
 
 
 # In[ ]:
