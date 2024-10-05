@@ -11,7 +11,7 @@ from sklearn.model_selection import KFold
 from sklearn.svm import SVR
 from xgboost import XGBRegressor
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level="INFO")
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level="INFO")
 log = logging.getLogger(__file__)
 
 # 讀取資料
@@ -23,7 +23,7 @@ test_id_list = list(test_df["id"])
 
 # 1. 特徵工程
 def feature_engineering(df):
-    df = df.drop(columns=["id"])
+    df = df.copy()
 
     # 將自動和手動變速器簡化為 "A/T" 和 "M/T"
     df["transmission"] = df["transmission"].replace({"Automatic": "A/T", "Manual": "M/T"})
@@ -43,6 +43,8 @@ def feature_engineering(df):
     df[["fuel_type", "accident", "clean_title"]] = df[["fuel_type", "accident", "clean_title"]].fillna(
         "unknown"
     )
+
+    df = df.drop(columns=["id"])
 
     return df
 
@@ -110,20 +112,19 @@ train_df, test_df = target_encode(train_df, test_df, "price", cat_cols)
 
 # 4. 模型訓練與預測
 # 定義模型
-svr = SVR(kernel="rbf")
-catboost_clf = CatBoostClassifier(
-    **{
-        "iterations": 1000,
-        "learning_rate": 0.03,
-        "depth": 10,
-        "l2_leaf_reg": 17,
-        "random_strength": 11,
-        "subsample": 0.95,
-        "verbose": 0,
-        "cat_features": cat_cols,
-        "random_seed": 9999,
-    }
-)
+# svr = SVR(kernel="rbf")
+catboost_clf_params = {
+    "iterations": 1000,
+    "learning_rate": 0.03,
+    "depth": 10,
+    "l2_leaf_reg": 17,
+    "random_strength": 11,
+    "subsample": 0.95,
+    "verbose": 0,
+    "cat_features": cat_cols,
+    "random_seed": 9999,
+}
+catboost_clf = CatBoostClassifier(**catboost_clf_params)
 lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
 xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
 ridge = Ridge(random_state=9999)
@@ -142,8 +143,7 @@ def get_oof_predictions(model, train_df, test_df, features, target_col, n_folds=
     oof_test = np.zeros(len(test_df))
     oof_test_skf = np.empty((n_folds, len(test_df)))
 
-    kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
-
+    kf = KFold(n_splits=n_folds, shuffle=True, random_state=9999)
     for i, (train_idx, val_idx) in enumerate(kf.split(train_df)):
         X_train, X_val = train_df.iloc[train_idx][features], train_df.iloc[val_idx][features]
         y_train, y_val = train_df.iloc[train_idx][target_col], train_df.iloc[val_idx][target_col]
