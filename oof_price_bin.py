@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[ ]:
+
+
 from __future__ import annotations
 
 import logging
@@ -8,8 +14,6 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import KFold
-
-# from sklearn.svm import SVR
 from xgboost import XGBRegressor
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level="INFO")
@@ -23,7 +27,7 @@ test_df = pd.read_csv("./data/test.csv")
 test_id_list = list(test_df["id"])
 
 
-# In[2]:
+# In[ ]:
 
 
 # 1. 特徵工程
@@ -168,14 +172,13 @@ num_features = [
 ]
 
 # 定義模型
-# svr = SVR(kernel="rbf")
 catboost_clf_params = {
     "iterations": 1000,
     "learning_rate": 0.03,
     "depth": 10,
     "l2_leaf_reg": 17,
     "random_strength": 11,
-    "subsample": 0.95,
+    # "subsample": 0.95,
     "verbose": 1,
     "cat_features": cat_features,
     "random_seed": 9999,
@@ -191,26 +194,37 @@ catboost_reg_params = {
     "verbose": 1,
     "cat_features": cat_features,
     "random_seed": 9999,
+    "loss_function": "RMSE",
 }
 catboost_reg = CatBoostRegressor(**catboost_reg_params)
-lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, verbose=1, random_state=9999)
-xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
+lgbm = LGBMRegressor(
+    max_depth=10,
+    learning_rate=0.03,
+    n_estimators=1000,
+    verbose=1,
+    random_state=9999,
+    objective="regression",
+    metric="rmse",
+)
+xgb = XGBRegressor(
+    max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999, objective='reg:squarederror'
+)
 ridge = Ridge(random_state=9999)
 
-log.info("Get OOF Predictions: catboost_clf")
+log.info("OOF Predictions: CatBoostClassifier")
 catboost_clf_oof_train, catboost_clf_oof_test = get_oof_predictions(
     catboost_clf, train_df, test_df, cat_features + num_features, "price_bin"
 )
 
-log.info("Get OOF Predictions: catboost_reg")
+log.info("OOF Predictions: CatBoostRegressor")
 catboost_reg_oof_train, catboost_reg_oof_test = get_oof_predictions(
     catboost_clf, train_df, test_df, cat_features + num_features, "log_price"
 )
 
-log.info("Get OOF Predictions: lgbm")
+log.info("OOF Predictions: LGBMRegressor")
 lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, num_features, "log_price")
 
-log.info("Get OOF Predictions: xgb")
+log.info("OOF Predictions: XGBRegressor")
 xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, num_features, "log_price")
 
 # 6. 集成模型 (Ridge 回歸)
@@ -219,7 +233,7 @@ ensemble_train = np.column_stack(
 )
 ensemble_test = np.column_stack([catboost_clf_oof_test, catboost_reg_oof_test, lgbm_oof_test, xgb_oof_test])
 
-log.info("Ridge Regression")
+log.info("Meta-Learner: Ridge")
 ridge.fit(ensemble_train, train_df["log_price"])
 final_predictions_log = ridge.predict(ensemble_test)
 final_predictions = np.expm1(final_predictions_log)
@@ -233,3 +247,4 @@ submission = pd.DataFrame({"id": test_id_list, "price": final_predictions})
 submission.to_csv("./data/submission.csv", index=False)
 
 log.info("Done")
+
