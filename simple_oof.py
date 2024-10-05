@@ -1,15 +1,15 @@
+from __future__ import annotations
+
 import logging
 
-import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold
-from sklearn.svm import SVR
+import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMRegressor
-from xgboost import XGBRegressor
 from sklearn.linear_model import Ridge
-from sklearn.metrics import mean_squared_error
-# from autogluon.tabular import TabularPredictor
+from sklearn.model_selection import KFold
+from sklearn.svm import SVR
+from xgboost import XGBRegressor
 
 logging.basicConfig(level="INFO")
 log = logging.getLogger(__file__)
@@ -40,7 +40,9 @@ def feature_engineering(df):
     df['brand_model'] = df['brand'] + "_" + df['model']
     df['int_ext_col'] = df['int_col'] + "_" + df['ext_col']
 
-    df[["fuel_type", "accident", "clean_title"]] = df[["fuel_type", "accident", "clean_title"]].fillna("unknown")
+    df[["fuel_type", "accident", "clean_title"]] = df[["fuel_type", "accident", "clean_title"]].fillna(
+        "unknown"
+    )
 
     return df
 
@@ -49,8 +51,6 @@ log.info("Feature Engineering: train_df")
 train_df = feature_engineering(train_df)
 log.info("Feature Engineering: test_df")
 test_df = feature_engineering(test_df)
-# print(train_df.isna().sum())
-# print(test_df.isna().sum())
 
 
 # 2. 異常檢測
@@ -62,7 +62,7 @@ def bin_price(data):
     IQR = Q3 - Q1
 
     # 定義異常值範圍
-    lower_bound = Q1 - 1.5 * IQR
+    # lower_bound = Q1 - 1.5 * IQR
     upper_bound = Q3 + 1.5 * IQR
 
     # 標記異常價格
@@ -112,19 +112,22 @@ train_df, test_df = target_encode(train_df, test_df, 'price', cat_cols)
 # 4. 模型訓練與預測
 # 定義模型
 svr = SVR(kernel='rbf')
-catboost_clf = CatBoostClassifier(**{
-    'iterations': 1000,
-    'learning_rate': 0.03,
-    'depth': 10,
-    'l2_leaf_reg': 17,
-    'random_strength': 11,
-    'subsample': 0.95,
-    'verbose': 0,
-    'cat_features': cat_cols
-})
+catboost_clf = CatBoostClassifier(
+    **{
+        'iterations': 1000,
+        'learning_rate': 0.03,
+        'depth': 10,
+        'l2_leaf_reg': 17,
+        'random_strength': 11,
+        'subsample': 0.95,
+        'verbose': 0,
+        'cat_features': cat_cols,
+    }
+)
 lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000)
 xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000)
 ridge = Ridge()
+
 
 # OOF 預測
 def get_oof_predictions(model, train_df, test_df, features, target_col, n_folds=5):
@@ -153,7 +156,16 @@ def get_oof_predictions(model, train_df, test_df, features, target_col, n_folds=
     return oof_train, oof_test
 
 
-features = ['brand_te', 'model_te', 'transmission_te', 'fuel_type_te', 'engine_te', 'milage', 'car_age', 'milage_per_year']
+features = [
+    'brand_te',
+    'model_te',
+    'transmission_te',
+    'fuel_type_te',
+    'engine_te',
+    'milage',
+    'car_age',
+    'milage_per_year',
+]
 
 # svr_oof_train, svr_oof_test = get_oof_predictions(svr, train_df, test_df, features, 'price')
 # log.info("Get OOF Predictions: catboost_clf")

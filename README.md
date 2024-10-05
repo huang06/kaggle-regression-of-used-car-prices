@@ -5,3 +5,25 @@
 ## Installation
 
 - Python3 (testd with 3.10)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -U pip setuptools wheel
+python3 -m pip install -U -r requirements.txt
+```
+
+
+## Various Approaches
+
+Private Score: 63822.27010 Public score: 72717.78853
+
+- bin_price
+- target encoding (median)
+- out-of-fold features (LGBMRegressor, XGBRegressor)
+- ensemble (Ridge)
+
+TODO:
+
+1. enrich out-of-fold features with more regressors
+2. HP-tunning
