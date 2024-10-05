@@ -11,7 +11,7 @@ from sklearn.model_selection import KFold
 from sklearn.svm import SVR
 from xgboost import XGBRegressor
 
-logging.basicConfig(level="INFO")
+logging.basicConfig(format="%(levelname)s:%(message)s", level="INFO")
 log = logging.getLogger(__file__)
 
 # 讀取資料
@@ -26,19 +26,19 @@ def feature_engineering(df):
     df = df.drop(columns=["id"])
 
     # 將自動和手動變速器簡化為 "A/T" 和 "M/T"
-    df['transmission'] = df['transmission'].replace({'Automatic': 'A/T', 'Manual': 'M/T'})
+    df["transmission"] = df["transmission"].replace({"Automatic": "A/T", "Manual": "M/T"})
 
     # 提取豪華品牌
-    luxury_brands = ['BMW', 'Mercedes-Benz', 'Audi', 'Lexus']
-    df['is_luxury'] = df['brand'].apply(lambda x: 1 if x in luxury_brands else 0)
+    luxury_brands = ["BMW", "Mercedes-Benz", "Audi", "Lexus"]
+    df["is_luxury"] = df["brand"].apply(lambda x: 1 if x in luxury_brands else 0)
 
     # 創建里程數/年
-    df['car_age'] = 2024 - df['model_year']
-    df['milage_per_year'] = df['milage'] / (df['car_age'] + 1)
+    df["car_age"] = 2024 - df["model_year"]
+    df["milage_per_year"] = df["milage"] / (df["car_age"] + 1)
 
     # 創建特徵交叉
-    df['brand_model'] = df['brand'] + "_" + df['model']
-    df['int_ext_col'] = df['int_col'] + "_" + df['ext_col']
+    df["brand_model"] = df["brand"] + "_" + df["model"]
+    df["int_ext_col"] = df["int_col"] + "_" + df["ext_col"]
 
     df[["fuel_type", "accident", "clean_title"]] = df[["fuel_type", "accident", "clean_title"]].fillna(
         "unknown"
@@ -57,8 +57,8 @@ test_df = feature_engineering(test_df)
 def bin_price(data):
     df = data.copy()
     # 計算四分位距
-    Q1 = np.percentile(df['price'], 25)
-    Q3 = np.percentile(df['price'], 75)
+    Q1 = np.percentile(df["price"], 25)
+    Q3 = np.percentile(df["price"], 75)
     IQR = Q3 - Q1
 
     # 定義異常值範圍
@@ -66,7 +66,7 @@ def bin_price(data):
     upper_bound = Q3 + 1.5 * IQR
 
     # 標記異常價格
-    df['price_bin'] = (df['price'] < upper_bound).astype(int)
+    df["price_bin"] = (df["price"] < upper_bound).astype(int)
     return df
 
 
@@ -82,12 +82,12 @@ def target_encode(train_df, test_df, target_col, cat_cols, n_folds=5):
         # 全局中位數作為回退值
         global_median = train_df[target_col].median()
 
-        train_df[f'{col}_te'] = np.nan
-        test_df[f'{col}_te'] = np.nan
+        train_df[f"{col}_te"] = np.nan
+        test_df[f"{col}_te"] = np.nan
 
         # 測試集使用整個訓練集的目標編碼
         test_col_mean = train_df.groupby(col)[target_col].median()
-        test_df[f'{col}_te'] = test_df[col].map(test_col_mean).fillna(global_median)
+        test_df[f"{col}_te"] = test_df[col].map(test_col_mean).fillna(global_median)
 
         # 針對每個 KFold 折，進行目標編碼
         for train_idx, val_idx in kf.split(train_df):
@@ -95,38 +95,38 @@ def target_encode(train_df, test_df, target_col, cat_cols, n_folds=5):
             # 針對訓練集進行 groupby，計算每個類別的目標變數中位數
             col_mean = X_train.groupby(col)[target_col].median()
             # 將中位數應用於驗證集，對於未出現的類別使用全局中位數作為回退
-            train_df.loc[val_idx, f'{col}_te'] = X_val[col].map(col_mean).fillna(global_median)
+            train_df.loc[val_idx, f"{col}_te"] = X_val[col].map(col_mean).fillna(global_median)
 
     return train_df, test_df
 
 
 log.info("Target Encoding: train_df, test_df")
-cat_cols = ['brand', 'model', 'transmission', 'fuel_type', 'engine']
-train_df, test_df = target_encode(train_df, test_df, 'price', cat_cols)
+cat_cols = ["brand", "model", "transmission", "fuel_type", "engine"]
+train_df, test_df = target_encode(train_df, test_df, "price", cat_cols)
 
 # print(train_df.isna().sum())
 # print(test_df.isna().sum())
 # raise
 
-
 # 4. 模型訓練與預測
 # 定義模型
-svr = SVR(kernel='rbf')
+svr = SVR(kernel="rbf")
 catboost_clf = CatBoostClassifier(
     **{
-        'iterations': 1000,
-        'learning_rate': 0.03,
-        'depth': 10,
-        'l2_leaf_reg': 17,
-        'random_strength': 11,
-        'subsample': 0.95,
-        'verbose': 0,
-        'cat_features': cat_cols,
+        "iterations": 1000,
+        "learning_rate": 0.03,
+        "depth": 10,
+        "l2_leaf_reg": 17,
+        "random_strength": 11,
+        "subsample": 0.95,
+        "verbose": 0,
+        "cat_features": cat_cols,
+        "random_seed": 9999,
     }
 )
-lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000)
-xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000)
-ridge = Ridge()
+lgbm = LGBMRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
+xgb = XGBRegressor(max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999)
+ridge = Ridge(random_state=9999)
 
 
 # OOF 預測
@@ -157,23 +157,23 @@ def get_oof_predictions(model, train_df, test_df, features, target_col, n_folds=
 
 
 features = [
-    'brand_te',
-    'model_te',
-    'transmission_te',
-    'fuel_type_te',
-    'engine_te',
-    'milage',
-    'car_age',
-    'milage_per_year',
+    "brand_te",
+    "model_te",
+    "transmission_te",
+    "fuel_type_te",
+    "engine_te",
+    "milage",
+    "car_age",
+    "milage_per_year",
 ]
 
-# svr_oof_train, svr_oof_test = get_oof_predictions(svr, train_df, test_df, features, 'price')
+# svr_oof_train, svr_oof_test = get_oof_predictions(svr, train_df, test_df, features, "price")
 # log.info("Get OOF Predictions: catboost_clf")
-# catboost_oof_train, catboost_oof_test = get_oof_predictions(catboost_clf, train_df, test_df, features, 'price_bin')
+# catboost_oof_train, catboost_oof_test = get_oof_predictions(catboost_clf, train_df, test_df, features, "price_bin")
 log.info("Get OOF Predictions: lgbm")
-lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, features, 'price')
+lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, features, "price")
 log.info("Get OOF Predictions: xgb")
-xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, features, 'price')
+xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, features, "price")
 
 # 5. 集成模型 (Ridge 回歸)
 # NOTE: drop svr_oof_train(test), catboost
@@ -181,11 +181,11 @@ ensemble_train = np.column_stack([lgbm_oof_train, xgb_oof_train])
 ensemble_test = np.column_stack([lgbm_oof_test, xgb_oof_test])
 
 log.info("Ridge Regression")
-ridge.fit(ensemble_train, train_df['price'])
+ridge.fit(ensemble_train, train_df["price"])
 final_predictions = ridge.predict(ensemble_test)
 
 # 6. 儲存預測結果
-submission = pd.DataFrame({'id': test_id_list, 'price': final_predictions})
-submission.to_csv('submission.csv', index=False)
+submission = pd.DataFrame({"id": test_id_list, "price": final_predictions})
+submission.to_csv("./data/submission.csv", index=False)
 
 log.info("Done")
