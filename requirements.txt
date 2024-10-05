@@ -1,4 +1,3 @@
-autogluon==1.1.1
 catboost
 category-encoders
 jupyterlab
@@ -10,6 +9,5 @@ pandas[performance]==2.2.3
 plotly
 pre-commit
 scikit-learn
-thinc==8.2.5
 xgboost
 ydata-profiling[notebook]
