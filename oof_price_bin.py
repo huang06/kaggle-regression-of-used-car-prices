@@ -19,7 +19,6 @@ logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level="INFO"
 # log = logging.getLogger(__file__)
 log = logging.getLogger("notebook")
 
-# 讀取資料
 train_df = pd.read_csv("./data/train.csv")
 test_df = pd.read_csv("./data/test.csv")
 
@@ -29,22 +28,39 @@ test_id_list = list(test_df["id"])
 # In[ ]:
 
 
-# 1. 特徵工程
+# feature engineering
 def feature_engineering(df):
     df = df.copy()
 
-    # 將自動和手動變速器簡化為 "A/T" 和 "M/T"
+    # Simplified transmission types into two categories:
     df["transmission"] = df["transmission"].replace({"Automatic": "A/T", "Manual": "M/T"})
 
-    # 提取豪華品牌
-    luxury_brands = ["BMW", "Mercedes-Benz", "Audi", "Lexus"]
+    # identify luxury brands
+    luxury_brands = {
+        'Aston',
+        'Audi',
+        'BMW',
+        'Bentley',
+        'Ferrari',
+        'Jaguar',
+        'Lamborghini',
+        'Land',
+        'Lexus',
+        'Maserati',
+        'Maybach',
+        'McLaren',
+        'Mercedes-Benz',
+        'Porsche',
+        'Rolls-Royce',
+    }
     df["is_luxury"] = df["brand"].apply(lambda x: 1 if x in luxury_brands else 0)
 
-    # 創建里程數/年
+    # Normalize a car’s mileage by its age.
+    # This reflects how intensively the car has been used, which can affect its price.
     df["car_age"] = 2024 - df["model_year"]
     df["milage_per_year"] = df["milage"] / (df["car_age"] + 1)
 
-    # 創建特徵交叉
+    # Create cross features
     df["brand_model"] = df["brand"] + "_" + df["model"]
     df["int_ext_col"] = df["int_col"] + "_" + df["ext_col"]
 
@@ -63,15 +79,17 @@ log.info("Feature Engineering: test_df")
 test_df = feature_engineering(test_df)
 
 
-# 2. 異常檢測
+# Outlier Detection
+# The car price distribution is highly right-skewed.
+# This skewed distribution can negatively affect the performance of the model,
+# as extreme values (outliers) tend to distort the predictions.
+# To address this, use an outlier detection function based on IQR.
 def bin_price(data):
     df = data.copy()
-    # 計算四分位距
     q1 = np.percentile(df["price"], 25)
     q3 = np.percentile(df["price"], 75)
     iqr = q3 - q1
     upper_bound = q3 + 1.5 * iqr
-    # 標記異常價格
     df["price_bin"] = (df["price"] < upper_bound).astype(int)
     return df
 
@@ -83,30 +101,24 @@ train_df = bin_price(train_df)
 # In[ ]:
 
 
-# 3. 目標編碼 (使用中位數)
+# Target Encoding
+# Convert the categorical features into numerical values, representing the median price of cars for each category.
 def target_encode(train_df, test_df, target_col, cat_cols, n_folds=5):
     for col in cat_cols:
         kf = KFold(n_splits=n_folds, shuffle=True, random_state=9999)
-
-        # 全局中位數作為回退值
         global_median = train_df[target_col].median()
 
         train_df[f"{col}_te"] = np.nan
         test_df[f"{col}_te"] = np.nan
 
-        # 測試集使用整個訓練集的目標編碼
         test_col_median = train_df.groupby(col)[target_col].median()
         test_df[f"{col}_te"] = test_df[col].map(test_col_median).fillna(global_median)
 
-        # 針對每個 KFold 折，進行目標編碼
         for train_idx, val_idx in kf.split(train_df):
             X_train = train_df.iloc[train_idx]
             X_val = train_df.iloc[val_idx]
-            # 針對訓練集進行 groupby，計算每個類別的目標變數中位數
             col_median = X_train.groupby(col)[target_col].median()
-            # 將中位數應用於驗證集，對於未出現的類別使用全局中位數作為回退
             train_df.loc[val_idx, f"{col}_te"] = X_val[col].map(col_median).fillna(global_median)
-
     return train_df, test_df
 
 
@@ -118,14 +130,9 @@ train_df, test_df = target_encode(train_df, test_df, "price", cat_cols)
 # In[ ]:
 
 
-# # 4. 目標變數對數轉換
-# train_df["log_price"] = np.log1p(train_df["price"])
-
-
-# In[ ]:
-
-
-# 5. 模型訓練與 OOF 預測
+# Model Stacking with Out-of-Fold Predictions
+# The OOF predictions allow the meta-learner to make better final predictions by
+# leveraging the strengths of each base model.
 def get_oof_predictions(model, train_df, test_df, features, target_col, n_folds=5):
     oof_train = np.zeros(len(train_df))
     oof_test = np.zeros(len(test_df))
@@ -168,13 +175,8 @@ num_features = [
     "milage",
     "car_age",
     "milage_per_year",
+    "is_luxury",
 ]
-
-# 定義模型
-xgb = XGBRegressor(
-    max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999, objective='reg:squarederror'
-)
-ridge = Ridge(random_state=9999)
 
 log.info("OOF Predictions: CatBoostClassifier")
 catboost_clf_params = {
@@ -224,15 +226,19 @@ lgbm = LGBMRegressor(
 lgbm_oof_train, lgbm_oof_test = get_oof_predictions(lgbm, train_df, test_df, num_features, "price")
 
 log.info("OOF Predictions: XGBRegressor")
+xgb = XGBRegressor(
+    max_depth=10, learning_rate=0.03, n_estimators=1000, random_state=9999, objective='reg:squarederror'
+)
 xgb_oof_train, xgb_oof_test = get_oof_predictions(xgb, train_df, test_df, num_features, "price")
 
-# 6. 集成模型 (Ridge 回歸)
+# Final Ensemble Model
 ensemble_train = np.column_stack(
     [catboost_clf_oof_train, catboost_reg_oof_train, lgbm_oof_train, xgb_oof_train]
 )
 ensemble_test = np.column_stack([catboost_clf_oof_test, catboost_reg_oof_test, lgbm_oof_test, xgb_oof_test])
 
 log.info("Meta-Learner: Ridge")
+ridge = Ridge(random_state=9999)
 ridge.fit(ensemble_train, train_df["price"])
 final_predictions = ridge.predict(ensemble_test)
 # final_predictions = np.expm1(final_predictions_log)
@@ -241,7 +247,6 @@ final_predictions = ridge.predict(ensemble_test)
 # In[ ]:
 
 
-# 6. 儲存預測結果
 submission = pd.DataFrame({"id": test_id_list, "price": final_predictions})
 submission.to_csv("./data/submission.csv", index=False)
 
